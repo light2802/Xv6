@@ -42,6 +42,7 @@ sys_getpid(void)
   return myproc()->pid;
 }
 
+//Returns new size for the curr process if successful, else -1
 int
 sys_sbrk(void)
 {
@@ -51,7 +52,10 @@ sys_sbrk(void)
   if(argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
-  if(growproc(n) < 0)
+  //Removed growproc and only increase size.
+  //Check for max size that can be provided.
+  myproc()->sz+=n;
+  if(0)     //Check here
     return -1;
   return addr;
 }
