@@ -234,8 +234,8 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz, int alloc)
   {
       while(a < newsz)
       {
-          pte_t *pte=walkpgdir(pgdir, a, 1);
-          i(*pte & PTE_P)
+          pte_t *pte=walkpgdir(pgdir, (char*)a, 1);
+          if(*pte & PTE_P)
               panic("remap");
           *pte = PTE_U|PTE_W;
           a+=PGSIZE;

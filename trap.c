@@ -77,7 +77,28 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
-
+  case T_PGFLT:
+    cprintf("Page fault occur for 0x%x\n", rcr2());
+    if(rcr2() > myproc()->sz)
+    {
+        cprintf("memory out of bounds\n");
+    }
+    else
+    {
+        char* mem=kalloc();
+        mem = kalloc();
+        if(mem == 0)
+        {
+            cprintf("kalloc out of memory\n");
+        }
+        else
+        {
+            memset(mem, 0, PGSIZE);
+            mappages(myproc()->pgdir, rcr2(), PGSIZE, V2P(mem));
+            loaduvm(myproc()->pgdir, myproc()->seg_info[);
+        }
+    }
+    
   //PAGEBREAK: 13
   default:
     if(myproc() == 0 || (tf->cs&3) == 0){

@@ -36,6 +36,8 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 struct segment_info
 {
+    char* vaddr;
+
 //Map code, data segment to disk
 };
 
@@ -54,7 +56,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  char path[30];               // Path to executable includeing name
+  struct segment_info seg_info[3];
 };
 
 // Process memory is laid out contiguously, low addresses first:
