@@ -57,6 +57,10 @@ exec(char *path, char **argv)
     //Save info for from where to load later, only 2 sections code, data
 
     //if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
+    curproc->seg_info[i].ip=ip;
+    curproc->seg_info[i].vaddr_start=(char*)ph.vaddr;
+    curproc->seg_info[i].offset=ph.off;
+    curproc->seg_info[i].sz=ph.filesz;
     //  goto bad;
   }
   iunlockput(ip);

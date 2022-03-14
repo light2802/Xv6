@@ -94,8 +94,23 @@ trap(struct trapframe *tf)
         else
         {
             memset(mem, 0, PGSIZE);
-            mappages(myproc()->pgdir, rcr2(), PGSIZE, V2P(mem));
-            loaduvm(myproc()->pgdir, myproc()->seg_info[);
+            mappages(myproc()->pgdir, (void*)rcr2(), PGSIZE, V2P(mem), PTE_U|PTE_W);
+            for(int i=0; i<2; i++)
+            {
+                if(rcr2() >=  (uint)myproc()->seg_info[i].vaddr_start &&
+                   rcr2() <=  (uint)myproc()->seg_info[i].vaddr_start + 
+                   (uint)myproc()->seg_info[i].sz)
+                {
+                    cprintf("fault due to code seg\n");
+                    loaduvm(myproc()->pgdir, 
+                            myproc()->seg_info[i].vaddr_start, 
+                            myproc()->seg_info[i].ip, 
+                            myproc()->seg_info[i].offset, 
+                            myproc()->seg_info[i].sz);
+                    lapiceoi();
+                }
+            }
+            cprintf("Actual page fault\n");
         }
     }
     
