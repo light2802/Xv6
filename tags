@@ -139,7 +139,7 @@ NBUF	param.h	12;"	d
 NCPU	param.h	3;"	d
 NDEV	param.h	7;"	d
 NDIRECT	fs.h	24;"	d
-NELEM	defs.h	190;"	d
+NELEM	defs.h	191;"	d
 NFILE	param.h	5;"	d
 NINDIRECT	fs.h	25;"	d
 NINODE	param.h	6;"	d
@@ -570,6 +570,7 @@ ioapicread	ioapic.c	/^ioapicread(int reg)$/;"	f	file:
 ioapicwrite	ioapic.c	/^ioapicwrite(int reg, uint data)$/;"	f	file:
 iomb	mmu.h	/^  ushort iomb;       \/\/ I\/O map base address$/;"	m	struct:taskstate
 ip	file.h	/^  struct inode *ip;$/;"	m	struct:file	typeref:struct:file::inode
+ip	proc.h	/^    struct inode* ip;$/;"	m	struct:segment_info	typeref:struct:segment_info::inode
 iput	fs.c	/^iput(struct inode *ip)$/;"	f
 iputtest	usertests.c	/^iputtest(void)$/;"	f
 iref	usertests.c	/^iref(void)$/;"	f
@@ -660,7 +661,7 @@ main	zombie.c	/^main(void)$/;"	f
 major	file.h	/^  short major;$/;"	m	struct:inode
 major	fs.h	/^  short major;          \/\/ Major device number (T_DEV only)$/;"	m	struct:dinode
 malloc	umalloc.c	/^malloc(uint nbytes)$/;"	f
-mappages	vm.c	/^mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)$/;"	f	file:
+mappages	vm.c	/^mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm, int alloc)$/;"	f
 match	grep.c	/^match(char *re, char *text)$/;"	f
 matchhere	grep.c	/^int matchhere(char *re, char *text)$/;"	f
 matchstar	grep.c	/^int matchstar(int c, char *re, char *text)$/;"	f
@@ -733,6 +734,7 @@ off	elf.h	/^  uint off;$/;"	m	struct:proghdr
 off	file.h	/^  uint off;$/;"	m	struct:file
 off_15_0	mmu.h	/^  uint off_15_0 : 16;   \/\/ low 16 bits of offset in segment$/;"	m	struct:gatedesc
 off_31_16	mmu.h	/^  uint off_31_16 : 16;  \/\/ high bits of offset in segment$/;"	m	struct:gatedesc
+offset	proc.h	/^    uint offset;$/;"	m	struct:segment_info
 ofile	proc.h	/^  struct file *ofile[NOFILE];  \/\/ Open files$/;"	m	struct:proc	typeref:struct:proc::file
 openiputtest	usertests.c	/^openiputtest(void)$/;"	f
 opentest	usertests.c	/^opentest(void)$/;"	f
@@ -861,8 +863,10 @@ sched	proc.c	/^sched(void)$/;"	f
 scheduler	proc.c	/^scheduler(void)$/;"	f
 scheduler	proc.h	/^  struct context *scheduler;   \/\/ swtch() here to enter scheduler$/;"	m	struct:cpu	typeref:struct:cpu::context
 second	date.h	/^  uint second;$/;"	m	struct:rtcdate
+seg_info	proc.h	/^  struct segment_info seg_info[2];$/;"	m	struct:proc	typeref:struct:proc::segment_info
 segdesc	mmu.h	/^struct segdesc {$/;"	s
 seginit	vm.c	/^seginit(void)$/;"	f
+segment_info	proc.h	/^struct segment_info$/;"	s
 setupkvm	vm.c	/^setupkvm(void)$/;"	f
 sharedfd	usertests.c	/^sharedfd(void)$/;"	f
 shentsize	elf.h	/^  ushort shentsize;$/;"	m	struct:elfhdr
@@ -947,6 +951,7 @@ sys_wait	sysproc.c	/^sys_wait(void)$/;"	f
 sys_write	sysfile.c	/^sys_write(void)$/;"	f
 syscall	syscall.c	/^syscall(void)$/;"	f
 syscalls	syscall.c	/^static int (*syscalls[])(void) = {$/;"	v	file:
+sz	proc.h	/^    uint sz;$/;"	m	struct:segment_info
 sz	proc.h	/^  uint sz;                     \/\/ Size of process memory (bytes)$/;"	m	struct:proc
 t	mmu.h	/^  ushort t;          \/\/ Trap on task switch$/;"	m	struct:taskstate
 taskstate	mmu.h	/^struct taskstate {$/;"	s
@@ -992,6 +997,7 @@ userinit	proc.c	/^userinit(void)$/;"	f
 ushort	types.h	/^typedef unsigned short ushort;$/;"	t
 uva2ka	vm.c	/^uva2ka(pde_t *pgdir, char *uva)$/;"	f
 vaddr	elf.h	/^  uint vaddr;$/;"	m	struct:proghdr
+vaddr_start	proc.h	/^    char* vaddr_start;$/;"	m	struct:segment_info
 valid	file.h	/^  int valid;          \/\/ inode has been read from disk?$/;"	m	struct:inode
 validateint	usertests.c	/^validateint(int *p)$/;"	f
 validatetest	usertests.c	/^validatetest(void)$/;"	f
