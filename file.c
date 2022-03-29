@@ -155,20 +155,30 @@ filewrite(struct file *f, char *addr, int n)
   panic("filewrite");
 }
 
-int filelseek(struct file* f, int offset, int whence)
+int
+filelseek(struct file* f, int offset, int whence)
 {
+    struct stat s;
+    filestat(f, &s);
+    if(whence == SEEK_SET)
+        whence = 0;
+    else if(whence == SEEK_CUR)
+        whence = f->off;
+    else if(whence == SEEK_END)
+        whence = s.size;
     if(offset + whence < 0)
     {
         f->off = 0;
         return 0;
     }
-    struct stat s;
-    filestat(f, &s);
     if(offset + whence > s.size)
     {
         f->off = s.size;
         return s.size;
     }
-    f->off = offset + whence;
-    return offset;
+    else
+    {
+        f->off = offset + whence;
+        return offset;
+    }
 }
