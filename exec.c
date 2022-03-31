@@ -18,6 +18,9 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+  curproc->page_ins = 0;
+  freebs(curproc);
+  curproc->blist = 0;
 
   begin_op();
 
@@ -26,6 +29,7 @@ exec(char *path, char **argv)
     cprintf("exec: fail\n");
     return -1;
   }
+  safestrcpy((curproc->path), path, strlen(path) + 1);
   ilock(ip);
   pgdir = 0;
 
@@ -49,50 +53,48 @@ exec(char *path, char **argv)
       goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
-    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz, 0)) == 0)
+    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
     //Dont load here. Load from disk when needed
     //Save info for from where to load later, only 2 sections code, data
-
-    //if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
-    curproc->seg_info[i].ip=ip;
-    curproc->seg_info[i].vaddr_start=(char*)ph.vaddr;
-    curproc->seg_info[i].offset=ph.off;
-    curproc->seg_info[i].sz=ph.filesz;
-    //  goto bad;
   }
   iunlockput(ip);
   end_op();
   ip = 0;
+  curproc->raw_elf_size = sz; // size of code+data+bss 
 
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE, 1)) == 0)
+  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
-  sp = sz;
+  char* buffer = curproc->buf;
+  sp=PGSIZE;
 
-  // Push argument strings, prepare rest of stack in ustack.
+  // Push argument strings in buffer, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)
       goto bad;
-    sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
-    if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
-      goto bad;
+    sp=(sp - (strlen(argv[argc]) + 1)) & ~3;
+    safestrcpy(&(curproc->buf[sp]), argv[argc], strlen(argv[argc])+1);
+    ustack[3+argc]=PGROUNDUP(curproc->raw_elf_size) + PGSIZE + sp;
+    //if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
+    //  goto bad;
     ustack[3+argc] = sp;
   }
   ustack[3+argc] = 0;
 
   ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = argc;
-  ustack[2] = sp - (argc+1)*4;  // argv pointer
+  ustack[2] =PGROUNDUP(curproc->raw_elf_size)+PGSIZE+(sp - (argc+1)*4));  // argv pointer
 
   sp -= (3+argc+1) * 4;
-  if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)
-    goto bad;
+  memmove(buffer+sp, ustack, (3+argc+1)*4);
+  //if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)
+  //  goto bad;
 
   // Save program name for debugging.
   for(last=s=path; *s; s++)
@@ -105,7 +107,8 @@ exec(char *path, char **argv)
   curproc->pgdir = pgdir;
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
-  curproc->tf->esp = sp;
+  curproc->tf->esp = PGROUNDUP(curproc->raw_elf_size) + PGSIZE + sp;
+  curproc->alloc-> = 0;
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;
