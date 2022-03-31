@@ -78,42 +78,10 @@ trap(struct trapframe *tf)
     lapiceoi();
     break;
   case T_PGFLT:
-    cprintf("Page fault occur for 0x%x\n", rcr2());
-    if(rcr2() > myproc()->sz)
-    {
-        cprintf("memory out of bounds\n");
-    }
-    else
-    {
-        char* mem=kalloc();
-        mem = kalloc();
-        if(mem == 0)
-        {
-            cprintf("kalloc out of memory\n");
-        }
-        else
-        {
-            memset(mem, 0, PGSIZE);
-            mappages(myproc()->pgdir, (void*)rcr2(), PGSIZE, V2P(mem), PTE_U|PTE_W);
-            for(int i=0; i<2; i++)
-            {
-                if(rcr2() >=  (uint)myproc()->seg_info[i].vaddr_start &&
-                   rcr2() <=  (uint)myproc()->seg_info[i].vaddr_start + 
-                   (uint)myproc()->seg_info[i].sz)
-                {
-                    cprintf("fault due to code seg\n");
-                    loaduvm(myproc()->pgdir, 
-                            myproc()->seg_info[i].vaddr_start, 
-                            myproc()->seg_info[i].ip, 
-                            myproc()->seg_info[i].offset, 
-                            myproc()->seg_info[i].sz);
-                    lapiceoi();
-                }
-            }
-            cprintf("Actual page fault\n");
-        }
-    }
-    
+    cprintf("Page fault occur for 0x%x in process%d\n", rcr2(), myproc()->pid);
+    page_fault_handler(rcr2());
+    lapiceoi();
+    break;
   //PAGEBREAK: 13
   default:
     if(myproc() == 0 || (tf->cs&3) == 0){

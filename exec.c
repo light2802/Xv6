@@ -18,7 +18,7 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
-  curproc->page_ins = 0;
+  curproc->page_fault_count = 0;
   freebs(curproc);
   curproc->blist = 0;
 
@@ -72,13 +72,13 @@ exec(char *path, char **argv)
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   char* buffer = curproc->buf;
-  sp=PGSIZE;
+  sp = PGSIZE;
 
   // Push argument strings in buffer, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)
       goto bad;
-    sp=(sp - (strlen(argv[argc]) + 1)) & ~3;
+    sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
     safestrcpy(&(curproc->buf[sp]), argv[argc], strlen(argv[argc])+1);
     ustack[3+argc]=PGROUNDUP(curproc->raw_elf_size) + PGSIZE + sp;
     //if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
@@ -89,7 +89,7 @@ exec(char *path, char **argv)
 
   ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = argc;
-  ustack[2] =PGROUNDUP(curproc->raw_elf_size)+PGSIZE+(sp - (argc+1)*4));  // argv pointer
+  ustack[2] = PGROUNDUP(curproc->raw_elf_size) + PGSIZE + (sp - (argc+1)*4));  // argv pointer
 
   sp -= (3+argc+1) * 4;
   memmove(buffer+sp, ustack, (3+argc+1)*4);
@@ -108,7 +108,7 @@ exec(char *path, char **argv)
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = PGROUNDUP(curproc->raw_elf_size) + PGSIZE + sp;
-  curproc->alloc-> = 0;
+  curproc->alloc = 0;
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;
