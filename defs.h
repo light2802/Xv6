@@ -187,10 +187,15 @@ pde_t*          copyuvm(struct proc*, struct proc*);
 void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
+void            clearptep(pde_t *pgdir, char *uva);
 void            clearpteu(pde_t *pgdir, char *uva);
+void            replace_page(struct proc*);
 void            page_fault_handler(uint addr);
 int             load_frame(char* pa, char* va);
-
+int             store_page(struct proc*, uint);
+uint            get_free_block(void);
+void            backstoreinit(void);
+void            freebs(void);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
