@@ -6,6 +6,12 @@
 #include "mmu.h"
 #include "proc.h"
 #include "elf.h"
+#include "fs.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "buf.h"
+#include "back_store.h"
+#include "file.h"
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -585,14 +591,14 @@ load_frame(char *pa, char *va){
     while(1){
 	// we get the bsframe with the necessary virtual address
 	if((char *)(temp->va) == va){
-	    current_index = ((uint)temp - (uint)(back_store.back_store_allocation)) / sizeof(struct bsframe);
+	    current_index = ((uint)temp - (uint)(backstore.backstore_bitmap)) / sizeof(struct bsframe);
 	    block_no = BACKSTORE_START + current_index * 8;
 	    break;
 	}
 	if(temp->next_index == -1){
 	    return -1;
 	}
-	temp = &(back_store.back_store_allocation[temp->next_index]);
+	temp = &(backstore.backstore_bitmap[temp->next_index]);
     }
     for(j = 0; j < 8; j++){
 	    buff = bread(ROOTDEV, (block_no) + j);

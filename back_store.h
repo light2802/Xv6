@@ -4,6 +4,6 @@ struct bsframe{
 };
 
 struct{
-    struct spinlock;
+    struct spinlock lock;
     struct bsframe backstore_bitmap[BACKSTORE_SIZE/8];
 } backstore;
