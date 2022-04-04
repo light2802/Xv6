@@ -390,6 +390,234 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
   return 0;
 }
 
+void
+page_fault_handler(unsigned int fault_addr){
+    // rounding it down to the base address of the page
+    //if the required address is beyond the user memory space
+    uint ALLOC;
+    if((uint)fault_addr >= KERNBASE){
+	cprintf("crossed the boundary of the user memory\n");
+	myproc()->killed = 1;
+	return;
+	//exit();
+    }
+    fault_addr = PGROUNDDOWN(fault_addr);
+    struct proc *currproc = myproc();
+    currproc->page_fault_count++;
+    struct elfhdr elf;
+    struct proghdr ph;
+    struct inode *ip;
+    int i, off;
+    char *mem;
+    int loaded = 0;
+    //if there is no memory opt for page replacement with the
+    //page replacement logic mentioned below
+    while((mem = kalloc()) == 0){
+	//cprintf("fault address %d\n", fault_addr);
+	currproc->page_inserted++;
+	replace_page(currproc);
+    }
+    /*
+     *	ALLOC is a 3 bit value (bit 10 11 12) which is available for us
+     *	So in our code we have used it to signify the priority to replace the
+     *	page during the page replacement
+     *	    The priority is based on the logic that whichever page faults first is
+     *	    given the available ALLOC value starting from 0, once there are 8 pages
+     *	    fulfilling the 3 bits, all other pages faulting after that will get the
+     *	    ALLOC value as 7.
+     *	    When there is a page fault and the user memory is full and there is a
+     *	    need of page replacement we page out the page with ALLOC value zero and
+     *	    all other pages's ALLOC of a process is deceremented
+     */
+    if(currproc->alloc < 8){
+
+	//cprintf("fault addrs : %d %d\n", fault_addr, currproc->alloc);
+	(currproc->alloc) += 1;
+    }
+    //cprintf("currproc in ipid, pgflt : %d %d\n",currproc->pid, currproc->alloc);
+    ALLOC = GETALLOC(((currproc->alloc) - 1));
+	//cprintf("checking av : %d\n", ALLOC);
+    if(mappages(currproc->pgdir, (char *)fault_addr, PGSIZE, V2P(mem), PTE_W | PTE_U | PTE_P, ALLOC) < 0){
+	    panic("mappages");
+    }
+    //*pte = V2P(mem) | ALLOC | PTE_W | PTE_U | PTE_P;
+    // if the page is from stack or heap
+    if((fault_addr > currproc->elf_size ||  currproc->code_on_bs) && load_frame(mem, (char *)fault_addr) == 1){
+	//cprintf("Here we loaded zero");
+	loaded = 1;
+	loaded++;
+    }
+
+    // if the faulted page is from the elf
+    else{
+
+	//ip from the path
+	begin_op();
+	ip = namei(currproc->path);
+	if(ip == 0){
+//	    cprintf("addr of ip : %d\n", ip);
+	    panic("Namei path");
+	}
+	ilock(ip);
+	readi(ip, (char *)&elf, 0, sizeof(elf));
+
+	for(i = 0, off = elf.phoff; i < elf.phnum; i++, off += sizeof(ph)){
+	    if(readi(ip, (char *)&ph, off, sizeof(ph)) != sizeof(ph))
+		panic("Prog header unable to read");
+
+	    if(ph.vaddr <= fault_addr && fault_addr <= ph.vaddr + ph.memsz){
+		// if the file size is enough for the page
+		if(ph.vaddr + ph.filesz >= fault_addr + PGSIZE){
+		    loaduvm(currproc->pgdir, (char *)(ph.vaddr + fault_addr), ip, ph.off + fault_addr, PGSIZE);
+    		    //readi(ip, (mem), ph.off + fault_addr, PGSIZE);
+		}
+		// if the filesize is not enough the append it with zeroes
+		else{
+		    // if the fault address(page) is for the bss section completely
+		    if(fault_addr >= ph.filesz){
+			if(fault_addr + PGSIZE <= ph.memsz){
+			    stosb(mem, 0, PGSIZE);
+			}
+			else{
+			    //memset(mem, 0, ph.memsz - fault_addr);
+			    stosb(mem, 0, ph.memsz - fault_addr);
+			}
+		    }
+		    // if the required page overlaps with (text + data) and bss section
+		    else{
+
+			loaduvm(currproc->pgdir, (char *)(ph.vaddr + fault_addr), ip, ph.off + fault_addr, ph.filesz - fault_addr);
+			//cprintf("%d\n", readi(ip, (mem), fault_addr, ph.memsz - fault_addr));
+			stosb((mem + (ph.filesz - fault_addr)), 0, PGSIZE - (ph.filesz - fault_addr));
+			ip = namei(currproc->path);
+		    }
+		}
+	    }
+	}
+	iunlockput(ip);
+	end_op();
+    }
+}
+
+void
+replace_page(struct proc *currproc){
+    pte_t *pte;
+    uint i;
+    uint alloc = 8, pa = 0, min_va = currproc->sz;
+    //uint dummy;
+    uint flags;
+    char reach_alloc_max = 0;
+    uint pte_alloc;
+    //if this is the case its process first page we need to look for pages from other
+    //priocess therefore we need to look for global replacement
+    if(currproc->alloc == 0){
+	panic("global replacement");
+    }
+    else{
+	//cprintf("currproc sz : %d\n", currproc->sz);
+	for(i = 0; i < (currproc->sz); i += PGSIZE){
+	    // if the page is of the stack guard
+	    if(i == PGROUNDUP(currproc->elf_size))
+		continue;
+	    if((pte = walkpgdir(currproc->pgdir, (void *)i, 0)) == 0){
+		panic("page replacement : copyuvm should exist");
+	    }
+	    if(*pte & (PTE_P)){
+		pa = PTE_ADDR(*pte);
+		flags = PTE_FLAGS(*pte);
+		// finding the virtual address having the minimum ALLOC value
+		if(alloc > (PTE_ALLOC(*pte) >> 9)){
+		    alloc =  PTE_ALLOC(*pte) >> 9;
+		    //cprintf("ALLOC : %d\n",ALLOC);
+		    min_va = i;
+		}
+		//*pte = *pte & ~(0xE00);
+		// all the allocated values greater than zero need to be decremented
+		if((uint)(PTE_ALLOC(*pte) >> 9) > 0 ){
+		    pte_alloc = PTE_ALLOC(*pte) >> 9;
+		    // for the first occurence of 7 only decrement others let it be 7
+		    if(pte_alloc == 7 ){
+			if(reach_alloc_max == 0){
+			    reach_alloc_max = 1;
+			  //  *pte = pa |  GETALLOC((pte_ALLOC - 1)) | flags;
+
+			}
+			else
+			    continue;
+		    }
+		    *pte = pa |  GETALLOC((pte_alloc - 1)) | flags ;
+		}
+	    }
+
+	}
+
+	//cprintf("min_va : %d\n", min_va);
+	//
+	pte = walkpgdir(currproc->pgdir, (void *)min_va, 0);
+	pa = PTE_ADDR(*pte);
+	//if((*pte & 0x40)){
+	    //cprintf("I am dirty");
+	    // storing the victim page on the backing store
+	    memmove((currproc->buf), (char *)P2V(pa), PGSIZE);
+	    if(store_page(currproc, min_va) == -1){
+		panic("Backing store size over");
+	    }
+//	}
+	//*pte = *pte & 0xFFFFF000;
+	*pte = pa | PTE_W | PTE_U;
+	//*pte = *pte;
+	char *va = P2V(pa);
+	currproc->code_on_bs = 1;
+//	cprintf("pa : PHYSTOP end %d %d %d\n", (pa), PHYSTOP, end);
+	kfree(va);
+    }
+}
+
+int
+load_frame(char *pa, char *va){
+    struct buf *buff;
+    struct proc *currproc = myproc();
+    //int i, j;
+    int j;
+    struct bsframe *temp = currproc->blist;
+    int current_index;
+    uint block_no;
+    while(1){
+	// we get the bsframe with the necessary virtual address
+	if((char *)(temp->va) == va){
+	    current_index = ((uint)temp - (uint)(back_store.back_store_allocation)) / sizeof(struct bsframe);
+	    block_no = BACKSTORE_START + current_index * 8;
+	    break;
+	}
+	if(temp->next_index == -1){
+	    return -1;
+	}
+	temp = &(back_store.back_store_allocation[temp->next_index]);
+    }
+    for(j = 0; j < 8; j++){
+	    buff = bread(ROOTDEV, (block_no) + j);
+	    memmove((pa + BSIZE * j), buff->data, BSIZE);
+	    brelse(buff);
+    }
+    return 1;
+
+    /*for(i = 0; i < currproc->index; i++){
+	if(back_store_allocation[(currproc->back_blocks[i] - BACKSTORE_START) / 8] == (uint)va){
+	    //cprintf("GOT %d\n", i);
+	    break;
+	}
+    }
+
+    if(i < currproc->index){
+	for(j = 0; j < 8; j++){
+	    buff = bread(ROOTDEV, (currproc->back_blocks[i]) + j);
+	    memmove((pa + BSIZE * j), buff->data, BSIZE);
+	    brelse(buff);
+	}
+	return 1;
+    }*/
+    //panic("No such frame in backing store");
+}
 //PAGEBREAK!
 // Blank page.
 //PAGEBREAK!

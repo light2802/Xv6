@@ -57,7 +57,8 @@ struct proc {
   uint alloc;
   uint code_on_bs;
   uint page_fault_count;
-  struct bframe* blist;
+  uint page_inserted;
+  struct bsframe* blist;
 };
 
 // Process memory is laid out contiguously, low addresses first:
