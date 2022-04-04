@@ -195,7 +195,7 @@ int             load_frame(char* pa, char* va);
 int             store_page(struct proc*, uint);
 uint            get_free_block(void);
 void            backstoreinit(void);
-void            freebs(void);
+void            freebs();
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

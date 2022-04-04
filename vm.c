@@ -222,7 +222,7 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
-  char *mem;
+  char *mem = (char*)V2P(0);
   uint a;
 
   if(newsz >= KERNBASE)
@@ -311,7 +311,7 @@ clearptep(pde_t *pgdir, char *uva)
   pte = walkpgdir(pgdir, uva, 0);
   if(pte == 0)
     panic("clearptep");
-  *pte &= ~PTE_U;
+  *pte &= ~PTE_P;
 }
 
 // Given a parent process's page table, create a copy
@@ -337,7 +337,7 @@ copyuvm(struct proc* dest, struct proc* src)
     if((mem = kalloc()) == 0)
       goto bad;
     memmove(mem, (char*)P2V(pa), PGSIZE);
-    if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0) {
+    if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags, alloc) < 0) {
       kfree(mem);
       goto bad;
     }

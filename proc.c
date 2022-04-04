@@ -86,6 +86,9 @@ allocproc(void)
   return 0;
 
 found:
+  p->blist = 0;
+  p->alloc = 0;
+  p->code_on_bs = 0;
   p->state = EMBRYO;
   p->pid = nextpid++;
 
@@ -130,6 +133,8 @@ userinit(void)
     panic("userinit: out of memory?");
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
   p->sz = PGSIZE;
+  cprintf("%d", _binary_initcode_size);
+  p->elf_size = (int) _binary_initcode_size;
   memset(p->tf, 0, sizeof(*p->tf));
   p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
   p->tf->ds = (SEG_UDATA << 3) | DPL_USER;
@@ -158,13 +163,26 @@ userinit(void)
 int
 growproc(int n)
 {
-  uint sz;
+  uint old_sz, sz;
+  int ret;
+  uint num_pages = 0; 
   struct proc *curproc = myproc();
 
   sz = curproc->sz;
-  if(n > 0){
-    if((sz = allocuvm(curproc->pgdir, sz, sz + n, 0)) == 0)
+  if(sz + n - PGROUNDUP(curproc->elf_size) + 2*PGSIZE > MAX_HEAP_SIZE)
       return -1;
+  old_sz = sz;
+  if(n > 0){
+    if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
+      return -1;
+    num_pages = (PGROUNDUP(sz) - PGROUNDUP(old_sz)) / PGSIZE;
+    for(int i=0; i<num_pages; i++)
+    {
+        memset(curproc->buf, 0, PGSIZE);
+        ret = store_page(curproc, old_sz + i*PGSIZE);
+        if(ret < 0)
+            return -1;
+    }
   } else if(n < 0){
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
@@ -190,13 +208,15 @@ fork(void)
   }
 
   // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+  if((np->pgdir = copyuvm(np, curproc)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
     return -1;
   }
   np->sz = curproc->sz;
+  np->alloc = curproc->alloc;
+  np->elf_size = curproc->elf_size;
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
@@ -208,7 +228,7 @@ fork(void)
       np->ofile[i] = filedup(curproc->ofile[i]);
   np->cwd = idup(curproc->cwd);
 
-  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+  safestrcpy(np->path, curproc->path, sizeof(curproc->path));
 
   pid = np->pid;
 
@@ -290,6 +310,7 @@ wait(void)
         kfree(p->kstack);
         p->kstack = 0;
         freevm(p->pgdir);
+        freebs(p);
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;

@@ -63,7 +63,7 @@ exec(char *path, char **argv)
   iunlockput(ip);
   end_op();
   ip = 0;
-  curproc->raw_elf_size = sz; // size of code+data+bss 
+  curproc->elf_size = sz; // size of code+data+bss 
 
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
@@ -80,7 +80,7 @@ exec(char *path, char **argv)
       goto bad;
     sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
     safestrcpy(&(curproc->buf[sp]), argv[argc], strlen(argv[argc])+1);
-    ustack[3+argc]=PGROUNDUP(curproc->raw_elf_size) + PGSIZE + sp;
+    ustack[3+argc]=PGROUNDUP(curproc->elf_size) + PGSIZE + sp;
     //if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
     //  goto bad;
     ustack[3+argc] = sp;
@@ -89,7 +89,7 @@ exec(char *path, char **argv)
 
   ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = argc;
-  ustack[2] = PGROUNDUP(curproc->raw_elf_size) + PGSIZE + (sp - (argc+1)*4));  // argv pointer
+  ustack[2] = PGROUNDUP(curproc->elf_size) + PGSIZE + (sp - (argc+1)*4);  // argv pointer
 
   sp -= (3+argc+1) * 4;
   memmove(buffer+sp, ustack, (3+argc+1)*4);
@@ -107,7 +107,7 @@ exec(char *path, char **argv)
   curproc->pgdir = pgdir;
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
-  curproc->tf->esp = PGROUNDUP(curproc->raw_elf_size) + PGSIZE + sp;
+  curproc->tf->esp = PGROUNDUP(curproc->elf_size) + PGSIZE + sp;
   curproc->alloc = 0;
   switchuvm(curproc);
   freevm(oldpgdir);

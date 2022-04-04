@@ -1,3 +1,5 @@
+#include "defs.h"
+#define MAX_HEAP_SIZE 3*1024*1024
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -49,12 +51,13 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  uint raw_elf_size;
+  uint elf_size;
   char buf[PGSIZE];
   char path[20];
   uint alloc;
   uint code_on_bs;
   uint page_fault_count;
+  struct bframe* blist;
 };
 
 // Process memory is laid out contiguously, low addresses first:
