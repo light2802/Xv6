@@ -10,7 +10,7 @@
 #include "spinlock.h"
 #include "sleeplock.h"
 #include "buf.h"
-#include "back_store.h"
+#include "backstore.h"
 #include "file.h"
 
 extern char data[];  // defined by kernel.ld
@@ -328,7 +328,7 @@ copyuvm(struct proc* dest, struct proc* src)
   pde_t *d;
   pte_t *pte;
   uint pa, i, flags;
-  char *mem;
+  char *mem = 0;
   int alloc = 0;
 
   if((d = setupkvm()) == 0)
@@ -336,18 +336,35 @@ copyuvm(struct proc* dest, struct proc* src)
   for(i = 0; i < src->elf_size; i += PGSIZE){
     if((pte = walkpgdir(src->pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
-      panic("copyuvm: page not present");
+    if(!(*pte & PTE_P)){
+        if(mappages(d, (char*)i, PGSIZE, V2P(mem), PTE_W | PTE_U, 0) < 0)
+            goto bad;
+    }
+    else{
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
       goto bad;
+    }
     memmove(mem, (char*)P2V(pa), PGSIZE);
     if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags, alloc) < 0) {
       kfree(mem);
       goto bad;
     }
   }
+
+  pte = walkpgdir(src->pgdir, (char *)(PGROUNDUP(src->elf_size) + PGSIZE), 0);
+  if(*pte & PTE_P){
+      memmove(dest->buf, (char *)(PGROUNDUP(src->elf_size) + PGSIZE), PGSIZE);
+      if(store_page(dest, (PGROUNDUP(src->elf_size) + PGSIZE)) < 0)
+          panic("no space to store stack in backstore\n");
+  }
+  else{
+      load_frame(dest->buf, (char *)(PGROUNDUP(src->elf_size) + PGSIZE));
+      if(store_page(dest, (PGROUNDUP(src->elf_size) + PGSIZE)) < 0)
+          panic("no space to store stack in backstore\n");
+  }
+
   return d;
 
 bad:
@@ -608,7 +625,7 @@ load_frame(char *pa, char *va){
     return 1;
 
     /*for(i = 0; i < currproc->index; i++){
-	if(back_store_allocation[(currproc->back_blocks[i] - BACKSTORE_START) / 8] == (uint)va){
+	if(backstore_allocation[(currproc->back_blocks[i] - BACKSTORE_START) / 8] == (uint)va){
 	    //cprintf("GOT %d\n", i);
 	    break;
 	}
