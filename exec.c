@@ -80,11 +80,11 @@ exec(char *path, char **argv)
     if(argc >= MAXARG)
       goto bad;
     sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
-    safestrcpy(&(curproc->buf[sp]), argv[argc], strlen(argv[argc])+1);
+    safestrcpy(&(curproc->buf[sp]), argv[argc], strlen(argv[argc]) + 1);
     ustack[3+argc]=PGROUNDUP(curproc->elf_size) + PGSIZE + sp;
     //if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
     //  goto bad;
-    ustack[3+argc] = sp;
+    //ustack[3+argc] = sp;
   }
   ustack[3+argc] = 0;
 
