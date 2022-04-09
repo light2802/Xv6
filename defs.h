@@ -68,7 +68,6 @@ void            ioapicinit(void);
 // kalloc.c
 char*           kalloc(void);
 void            kfree(char*);
-void            kinit0(void);
 void            kinit1(void*, void*);
 void            kinit2(void*, void*);
 
@@ -194,7 +193,7 @@ void            page_fault_handler(uint addr);
 int             load_frame(char* pa, char* va);
 int             store_page(struct proc*, uint);
 uint            get_free_block(void);
-void            backstoreinit(void);
+void            backstore_init(void);
 void            freebs();
 
 // number of elements in fixed-size array

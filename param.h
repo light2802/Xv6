@@ -11,5 +11,5 @@
 #define LOGSIZE      (MAXOPBLOCKS*3)  // max data blocks in on-disk log
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       1000  // size of file system in blocks
-#define BACKSTORE_START 0
-#define BACKSTORE_SIZE ((224 * 1024 * 1024) / 512) // size of  backstore in number of sectors
+#define BACKSTORE_START 1100
+#define BACKSTORE_SIZE ((500 * 1024 * 1024) / 512) // size of  backstore in number of sectors(500 MB)

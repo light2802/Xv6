@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "backstore.h"
 
 struct {
   struct spinlock lock;
@@ -250,6 +251,9 @@ exit(void)
   struct proc *curproc = myproc();
   struct proc *p;
   int fd;
+
+  curproc->page_inserted = 0;
+  curproc->page_fault_count = 0;
 
   if(curproc == initproc)
     panic("init exiting");

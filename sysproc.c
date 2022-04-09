@@ -52,11 +52,8 @@ sys_sbrk(void)
   if(argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
-  //Removed growproc and only increase size.
-  //Check for max size that can be provided.
-  myproc()->sz+=n;
-  if(0)     //Check here
-    return -1;
+  if(growproc(n) < 0)
+      return -1;
   return addr;
 }
 

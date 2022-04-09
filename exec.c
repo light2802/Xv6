@@ -18,6 +18,7 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+  curproc->page_inserted = 0;
   curproc->page_fault_count = 0;
   freebs(curproc);
   curproc->blist = 0;
