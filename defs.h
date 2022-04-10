@@ -9,7 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
-struct bsframe;
+struct backstore_frame;
 
 // bio.c
 void            binit(void);
@@ -194,7 +194,7 @@ int             load_frame(char* pa, char* va);
 int             store_page(struct proc*, uint);
 uint            get_free_block(void);
 void            backstore_init(void);
-void            freebs();
+void            free_backstore();
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

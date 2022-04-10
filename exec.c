@@ -20,7 +20,7 @@ exec(char *path, char **argv)
   struct proc *curproc = myproc();
   curproc->page_inserted = 0;
   curproc->page_fault_count = 0;
-  freebs(curproc);
+  free_backstore(curproc);
   curproc->blist = 0;
 
   begin_op();
@@ -94,6 +94,8 @@ exec(char *path, char **argv)
 
   sp -= (3+argc+1) * 4;
   memmove(buffer+sp, ustack, (3+argc+1)*4);
+  if(store_page(curproc, sz - PGSIZE) < 0)
+      panic("no space to store stack in backstore");
   //if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)
   //  goto bad;
 

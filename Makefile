@@ -1,5 +1,5 @@
 OBJS = \
-	back_store.o\
+	backstore.o\
 	bio.o\
 	console.o\
 	exec.o\

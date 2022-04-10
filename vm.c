@@ -548,7 +548,7 @@ void replace_page(struct proc *currproc){
 	    if(*pte & (PTE_P)){
 		pa = PTE_ADDR(*pte); 
 		flags = PTE_FLAGS(*pte);
-		// finding the virtual address having the minimum avl value
+		// finding the virtual address having the minimum alloc value
 		if(alloc > (PTE_ALLOC(*pte) >> 9)){
 		    alloc =  PTE_ALLOC(*pte) >> 9;
 		    //cprintf("avl : %d\n",avl);
@@ -560,18 +560,15 @@ void replace_page(struct proc *currproc){
 		    PTE_ALLOC = PTE_ALLOC(*pte) >> 9;
 		    // for the first occurence of 7 only decrement others let it be 7
 		    if(PTE_ALLOC == 7 ){
-			if(reach_alloc_max == 0){
-			    reach_alloc_max = 1;
-			  //  *pte = pa |  GETALLOC((PTE_ALLOC - 1)) | flags;
-			
-			}
-			else
-			    continue;
+			    if(reach_alloc_max == 0){
+			        reach_alloc_max = 1;
+			        //*pte = pa |  GETALLOC((PTE_ALLOC - 1)) | flags;
+			    }
 		    }
 		    *pte = pa |  GETALLOC((PTE_ALLOC - 1)) | flags ;
 		}
 		//*pte = pa | GETALLOC(((PTE_ALLOC(*pte)>>9) - 1)) | flags;
-		//*pte = *pte | GETALLOC((avl - 1));
+		//*pte = *pte | GETALLOC((alloc - 1));
 	    }
 		
 	}
@@ -603,42 +600,42 @@ int load_frame(char *pa, char *va){
     struct proc *currproc = myproc();
     //int i, j;
     int j;
-    struct bsframe *temp = currproc->blist;
+    struct backstore_frame *temp = currproc->blist;
     int current_index;
     uint block_no;
     while(1){
-	// we get the bsframe with the necessary virtual address
-	if((char *)(temp->va) == va){
-	    current_index = ((uint)temp - (uint)(backstore.backstore_bitmap)) / sizeof(struct bsframe);
-	    block_no = BACKSTORE_START + current_index * 8;
-	    break;
-	}
-	if(temp->next_index == -1){
-	    return -1;
-	}
-	temp = &(backstore.backstore_bitmap[temp->next_index]);
+	    // we get the backstore_frame with the necessary virtual address
+	    if((char *)(temp->va) == va){
+	        current_index = ((uint)temp - (uint)(backstore.backstore_bitmap)) / sizeof(struct backstore_frame);
+	        block_no = BACKSTORE_START + current_index * 8;
+	        break;
+	    }
+	    if(temp->next_index == -1)
+	        return -1;
+	    temp = &(backstore.backstore_bitmap[temp->next_index]);
     }
     for(j = 0; j < 8; j++){
 	    buff = bread(ROOTDEV, (block_no) + j);
 	    memmove((pa + BSIZE * j), buff->data, BSIZE);
 	    brelse(buff);
     }
+    
     return 1;
 
     /*for(i = 0; i < currproc->index; i++){
-	if(back_store_allocation[(currproc->back_blocks[i] - BACKSTORE_START) / 8] == (uint)va){
-	    //cprintf("GOT %d\n", i);
-	    break;
-	}
+    	if(back_store_allocation[(currproc->back_blocks[i] - BACKSTORE_START) / 8] == (uint)va){
+	        //cprintf("GOT %d\n", i);
+	        break;
+	    }
     }
     
     if(i < currproc->index){
-	for(j = 0; j < 8; j++){
-	    buff = bread(ROOTDEV, (currproc->back_blocks[i]) + j);
-	    memmove((pa + BSIZE * j), buff->data, BSIZE);
-	    brelse(buff);
-	}
-	return 1;
+	    for(j = 0; j < 8; j++){
+	        buff = bread(ROOTDEV, (currproc->back_blocks[i]) + j);
+	        memmove((pa + BSIZE * j), buff->data, BSIZE);
+	        brelse(buff);
+	    }
+	    return 1;
     }*/
     //panic("No such frame in backing store");
 }
