@@ -530,7 +530,7 @@ void replace_page(struct proc *currproc){
     //uint dummy;
     uint flags;
     char reach_alloc_max = 0;
-    uint PTE_ALLOC;
+    uint pte_alloc;
     //if this is the case its process first page we need to look for pages from other 
     //priocess therefore we need to look for global replacement
     if(currproc->alloc == 0){
@@ -557,15 +557,15 @@ void replace_page(struct proc *currproc){
 		//*pte = *pte & ~(0xE00);
 		// all the avl values greater than zero need to be decremented
 		if((uint)(PTE_ALLOC(*pte) >> 9) > 0 ){
-		    PTE_ALLOC = PTE_ALLOC(*pte) >> 9;
+		    pte_alloc = PTE_ALLOC(*pte) >> 9;
 		    // for the first occurence of 7 only decrement others let it be 7
-		    if(PTE_ALLOC == 7 ){
+		    if(pte_alloc == 7 ){
 			    if(reach_alloc_max == 0){
 			        reach_alloc_max = 1;
-			        //*pte = pa |  GETALLOC((PTE_ALLOC - 1)) | flags;
+			        //*pte = pa |  GETALLOC((pte_alloc - 1)) | flags;
 			    }
 		    }
-		    *pte = pa |  GETALLOC((PTE_ALLOC - 1)) | flags ;
+		    *pte = pa |  GETALLOC((pte_alloc - 1)) | flags ;
 		}
 		//*pte = pa | GETALLOC(((PTE_ALLOC(*pte)>>9) - 1)) | flags;
 		//*pte = *pte | GETALLOC((alloc - 1));
