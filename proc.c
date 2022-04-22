@@ -166,7 +166,7 @@ growproc(int n)
 {
   uint old_sz, sz;
   int ret;
-  uint num_pages = 0; 
+  uint num_pages = 0;
   struct proc *curproc = myproc();
 
   sz = curproc->sz;
@@ -255,7 +255,6 @@ exit(void)
 
   curproc->page_inserted = 0;
   curproc->page_fault_count = 0;
-
   if(curproc == initproc)
     panic("init exiting");
 

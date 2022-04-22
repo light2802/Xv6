@@ -42,7 +42,6 @@ sys_getpid(void)
   return myproc()->pid;
 }
 
-//Returns new size for the curr process if successful, else -1
 int
 sys_sbrk(void)
 {
@@ -53,7 +52,7 @@ sys_sbrk(void)
     return -1;
   addr = myproc()->sz;
   if(growproc(n) < 0)
-      return -1;
+    return -1;
   return addr;
 }
 

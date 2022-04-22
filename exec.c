@@ -58,8 +58,6 @@ exec(char *path, char **argv)
       goto bad;
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
-    //Dont load here. Load from disk when needed
-    //Save info for from where to load later, only 2 sections code, data
   }
   iunlockput(ip);
   end_op();
@@ -75,16 +73,13 @@ exec(char *path, char **argv)
   char* buffer = curproc->buf;
   sp = PGSIZE;
 
-  // Push argument strings in buffer, prepare rest of stack in ustack.
+  // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)
       goto bad;
     sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
     safestrcpy(&(curproc->buf[sp]), argv[argc], strlen(argv[argc]) + 1);
     ustack[3+argc]=PGROUNDUP(curproc->elf_size) + PGSIZE + sp;
-    //if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
-    //  goto bad;
-    //ustack[3+argc] = sp;
   }
   ustack[3+argc] = 0;
 
@@ -96,8 +91,6 @@ exec(char *path, char **argv)
   memmove(buffer+sp, ustack, (3+argc+1)*4);
   if(store_page(curproc, sz - PGSIZE) < 0)
       panic("no space to store stack in backstore");
-  //if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)
-  //  goto bad;
 
   // Save program name for debugging.
   for(last=s=path; *s; s++)
