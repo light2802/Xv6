@@ -316,7 +316,6 @@ clearptep(pde_t *pgdir, char *uva)
     panic("clearptep");
   *pte &= ~PTE_P;
 }
-
 // Given a parent process's page table, create a copy
 // of it for a child.
 pde_t*
@@ -460,17 +459,16 @@ void page_fault_handler(unsigned int fault_addr){
 		            }
 		            else{
 			            loaduvm(currproc->pgdir, (char *)(ph.vaddr + fault_addr), ip, ph.off + fault_addr, ph.filesz - fault_addr);
-			            stosb((mem + (ph.filesz - fault_addr)), 0, PGSIZE - (ph.filesz - fault_addr));	    
+			            stosb((mem + (ph.filesz - fault_addr)), 0, PGSIZE - (ph.filesz - fault_addr)); 
 			            ip = namei(currproc->path);
 		            }
 		        }
 	        }
 	    }
-	    iunlockput(ip);    
+	    iunlockput(ip);
 	    end_op();
     }
-}    
-
+}
 void replace_page(struct proc *currproc){
     pte_t *pte;
     uint i;
@@ -487,7 +485,7 @@ void replace_page(struct proc *currproc){
 	        if((pte = walkpgdir(currproc->pgdir, (void *)i, 0)) == 0)
 		        panic("page replacement : copyuvm should exist");
 	        if(*pte & (PTE_P)){
-		        pa = PTE_ADDR(*pte); 
+		        pa = PTE_ADDR(*pte);
 		        flags = PTE_FLAGS(*pte);
 		        if(alloc > (PTE_ALLOC(*pte) >> 9)){
 		            alloc =  PTE_ALLOC(*pte) >> 9;
@@ -501,7 +499,7 @@ void replace_page(struct proc *currproc){
 		            }
 		            *pte = pa |  GETALLOC((pte_alloc - 1)) | flags ;
 		        }
-	        }	
+            }
 	    }
 	    pte = walkpgdir(currproc->pgdir, (void *)min_va, 0);
 	    pa = PTE_ADDR(*pte);
@@ -514,7 +512,6 @@ void replace_page(struct proc *currproc){
 	    kfree(va);
     }
 }
-
 int load_frame(char *pa, char *va){
     struct buf *buff;
     struct proc *currproc = myproc();

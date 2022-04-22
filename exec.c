@@ -79,7 +79,7 @@ exec(char *path, char **argv)
       goto bad;
     sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
     safestrcpy(&(curproc->buf[sp]), argv[argc], strlen(argv[argc]) + 1);
-    ustack[3+argc]=PGROUNDUP(curproc->elf_size) + PGSIZE + sp;
+    ustack[3+argc] = PGROUNDUP(curproc->elf_size) + PGSIZE + sp;
   }
   ustack[3+argc] = 0;
 

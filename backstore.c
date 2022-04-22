@@ -8,14 +8,12 @@
 #include "fs.h"
 #include "buf.h"
 #include "backstore.h"
-
 void backstore_init() {
     initlock(&backstore.lock, "backstore");
     for (int i = 0; i < BACKSTORE_SIZE / 8; i++) {
         backstore.backstore_bitmap[i].va = -1;
     }
 }
-
 int store_page(struct proc *currproc, uint va) {
     uint            block_no;
     struct buf *    frame;
@@ -23,7 +21,6 @@ int store_page(struct proc *currproc, uint va) {
     int             current_index;
     struct backstore_frame *temp = currproc->blist;
     struct backstore_frame *prev = temp;
-    // if the blist is empty start it
     if (currproc->blist == 0) {
         if ((block_no = get_free_block()) == -1) { return -1; }
         currproc->blist = &(
@@ -38,12 +35,8 @@ int store_page(struct proc *currproc, uint va) {
             bwrite(frame);
             brelse(frame);
         }
-
-        // cprintf("got index : %d\n", i);
         return 1;
     }
-    // finding if the virtual address for the given process is stored on the
-    // backing store
     while (1) {
         if ((uint)temp->va == va) {
             current_index = ((uint)temp - (uint)(backstore.backstore_bitmap))
@@ -55,7 +48,6 @@ int store_page(struct proc *currproc, uint va) {
                 bwrite(frame);
                 brelse(frame);
             }
-            // cprintf("got index : %d\n", i);
             return 1;
         }
         if (temp->next_index == -1) { break; }
@@ -63,18 +55,11 @@ int store_page(struct proc *currproc, uint va) {
         temp = &(backstore.backstore_bitmap[temp->next_index]);
     }
     if ((block_no = get_free_block()) == -1) { return -1; }
-
-    // cprintf("received block no : %d\n", block_no);
     acquire(&backstore.lock);
     backstore.backstore_bitmap[(block_no - BACKSTORE_START) / 8].va = va;
-    backstore.backstore_bitmap[(block_no - BACKSTORE_START) / 8].next_index =
-            -1;
+    backstore.backstore_bitmap[(block_no - BACKSTORE_START) / 8].next_index = -1;
     release(&backstore.lock);
     prev->next_index = (block_no - BACKSTORE_START) / 8;
-    /*if(currproc->index == MAX_BACK_PAGES - 1){
-    return -1;
-    }*/
-    // currproc->back_blocks[currproc->index++] = block_no;
     for (i = 0; i < 8; i++) {
         frame = bget(ROOTDEV, block_no + i);
         memmove(frame->data, (currproc->buf) + BSIZE * i, BSIZE);
@@ -83,7 +68,6 @@ int store_page(struct proc *currproc, uint va) {
     }
     return 1;
 }
-
 uint get_free_block() {
     int i;
     for (i = 0; i < BACKSTORE_SIZE / 8; i++) {
@@ -92,12 +76,7 @@ uint get_free_block() {
     }
     return -1;
 }
-
 void free_backstore(struct proc *curproc) {
-    /*for(int i = 0; i < curproc->index; i++){
-        backstore_bitmap[(curproc->back_blocks[i] - BACKSTORE_START) / 8] = -1;
-    }
-    curproc->index = 0;*/
     struct backstore_frame *temp = curproc->blist;
     struct backstore_frame *prev = temp;
     if (temp == 0) return;
