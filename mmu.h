@@ -98,7 +98,9 @@ struct segdesc {
 
 // Address in page table or page directory entry
 #define PTE_ADDR(pte)   ((uint)(pte) & ~0xFFF)
-#define PTE_FLAGS(pte)  ((uint)(pte) &  0xFFF)
+#define PTE_FLAGS(pte)  ((uint)(pte) &  0x1FF)
+#define PTE_ALLOC(pte)  ((uint)(pte) &  0xE00) 
+#define GETALLOC(alloc) (alloc<<9)
 
 #ifndef __ASSEMBLER__
 typedef uint pte_t;

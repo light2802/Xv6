@@ -6,6 +6,12 @@
 #include "mmu.h"
 #include "proc.h"
 #include "elf.h"
+#include "fs.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "buf.h"
+#include "backstore.h"
+#include "file.h"
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -58,7 +64,7 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
 // physical addresses starting at pa. va and size might not
 // be page-aligned.
 static int
-mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
+mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm, int alloc)
 {
   char *a, *last;
   pte_t *pte;
@@ -70,7 +76,7 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
       return -1;
     if(*pte & PTE_P)
       panic("remap");
-    *pte = pa | perm | PTE_P;
+    *pte = pa | perm | alloc;
     if(a == last)
       break;
     a += PGSIZE;
@@ -108,10 +114,10 @@ static struct kmap {
   uint phys_end;
   int perm;
 } kmap[] = {
- { (void*)KERNBASE, 0,             EXTMEM,    PTE_W}, // I/O space
- { (void*)KERNLINK, V2P(KERNLINK), V2P(data), 0},     // kern text+rodata
- { (void*)data,     V2P(data),     PHYSTOP,   PTE_W}, // kern data+memory
- { (void*)DEVSPACE, DEVSPACE,      0,         PTE_W}, // more devices
+ { (void*)KERNBASE, 0,             EXTMEM,    PTE_W | PTE_P}, // I/O space
+ { (void*)KERNLINK, V2P(KERNLINK), V2P(data), 0 | PTE_P},     // kern text+rodata
+ { (void*)data,     V2P(data),     PHYSTOP,   PTE_W | PTE_P}, // kern data+memory
+ { (void*)DEVSPACE, DEVSPACE,      0,         PTE_W | PTE_P}, // more devices
 };
 
 // Set up kernel part of a page table.
@@ -128,7 +134,7 @@ setupkvm(void)
     panic("PHYSTOP too high");
   for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
-                (uint)k->phys_start, k->perm) < 0) {
+                (uint)k->phys_start, k->perm | PTE_P, 0) < 0) {
       freevm(pgdir);
       return 0;
     }
@@ -188,7 +194,7 @@ inituvm(pde_t *pgdir, char *init, uint sz)
     panic("inituvm: more than a page");
   mem = kalloc();
   memset(mem, 0, PGSIZE);
-  mappages(pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
+  mappages(pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U|PTE_P, 0);
   memmove(mem, init, sz);
 }
 
@@ -221,7 +227,7 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
-  char *mem;
+  char *mem = (char*)V2P(0);
   uint a;
 
   if(newsz >= KERNBASE)
@@ -231,18 +237,9 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE){
-    mem = kalloc();
-    if(mem == 0){
-      cprintf("allocuvm out of memory\n");
-      deallocuvm(pgdir, newsz, oldsz);
-      return 0;
-    }
-    memset(mem, 0, PGSIZE);
-    if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
-      cprintf("allocuvm out of memory (2)\n");
-      deallocuvm(pgdir, newsz, oldsz);
-      kfree(mem);
-      return 0;
+      if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U, 0) < 0){
+          cprintf("allocuvm out of memory (2)\n");
+          return 0;
     }
   }
   return newsz;
@@ -310,32 +307,58 @@ clearpteu(pde_t *pgdir, char *uva)
   *pte &= ~PTE_U;
 }
 
+void
+clearptep(pde_t *pgdir, char *uva)
+{
+  pte_t *pte;
+  pte = walkpgdir(pgdir, uva, 0);
+  if(pte == 0)
+    panic("clearptep");
+  *pte &= ~PTE_P;
+}
 // Given a parent process's page table, create a copy
 // of it for a child.
 pde_t*
-copyuvm(pde_t *pgdir, uint sz)
+copyuvm(struct proc* dest, struct proc* src)
 {
   pde_t *d;
   pte_t *pte;
-  uint pa, i, flags;
-  char *mem;
+  uint pa = 0, flags = 0, i;
+  char *mem = 0;
+  int alloc = 0;
 
   if((d = setupkvm()) == 0)
     return 0;
-  for(i = 0; i < sz; i += PGSIZE){
-    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+  for(i = 0; i < src->elf_size; i += PGSIZE){
+    if((pte = walkpgdir(src->pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
-      panic("copyuvm: page not present");
+    if(!(*pte & PTE_P)){
+        if(mappages(d, (char*)i, PGSIZE, V2P(mem), PTE_W | PTE_U, 0) < 0)
+            goto bad;
+    }
+    else{
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
+    alloc = PTE_ALLOC(*pte);
     if((mem = kalloc()) == 0)
       goto bad;
+    }
     memmove(mem, (char*)P2V(pa), PGSIZE);
-    if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0) {
+    if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags, alloc) < 0) {
       kfree(mem);
       goto bad;
     }
+  }
+  pte = walkpgdir(src->pgdir, (char *)(PGROUNDUP(src->elf_size) + PGSIZE), 0);
+  if(*pte & PTE_P){
+      memmove(dest->buf, (char *)(PGROUNDUP(src->elf_size) + PGSIZE), PGSIZE);
+      if(store_page(dest, (PGROUNDUP(src->elf_size) + PGSIZE)) < 0)
+          panic("no space to store stack in backstore\n");
+  }
+  else{
+      load_frame(dest->buf, (char *)(PGROUNDUP(src->elf_size) + PGSIZE));
+      if(store_page(dest, (PGROUNDUP(src->elf_size) + PGSIZE)) < 0)
+          panic("no space to store stack in backstore\n");
   }
   return d;
 
@@ -385,6 +408,134 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
   return 0;
 }
 
+void page_fault_handler(unsigned int fault_addr){
+    uint alloc;
+    if((uint)fault_addr >= KERNBASE){
+	    cprintf("crossed the boundary of the user memory\n");
+	    myproc()->killed = 1;
+	    return;
+    }
+    fault_addr = PGROUNDDOWN(fault_addr);
+    struct proc *currproc = myproc();
+    currproc->page_fault_count++;
+    struct elfhdr elf;
+    struct proghdr ph;
+    struct inode *ip;
+    int i, off;
+    char *mem;
+    int loaded = 0;
+    while((mem = kalloc()) == 0){
+	    currproc->page_inserted++;
+	    replace_page(currproc);
+    }
+    if(currproc->alloc < 8)
+	    (currproc->alloc) += 1;
+    alloc = GETALLOC(((currproc->alloc) - 1));
+    if(mappages(currproc->pgdir, (char *)fault_addr, PGSIZE, V2P(mem), PTE_W | PTE_U | PTE_P, alloc) < 0)
+	    panic("mappages");
+    if((fault_addr > currproc->elf_size ||  currproc->code_on_bs) && load_frame(mem, (char *)fault_addr) == 1){
+	    loaded = 1;
+	    loaded++;
+    }
+    else{
+	    begin_op();
+	    ip = namei(currproc->path);
+	    if(ip == 0)
+	        panic("Namei path");
+	    ilock(ip);
+	    readi(ip, (char *)&elf, 0, sizeof(elf));
+	    for(i = 0, off = elf.phoff; i < elf.phnum; i++, off += sizeof(ph)){
+	        if(readi(ip, (char *)&ph, off, sizeof(ph)) != sizeof(ph))
+		        panic("Prog header unable to read");
+	        if(ph.vaddr <= fault_addr && fault_addr <= ph.vaddr + ph.memsz){
+		        if(ph.vaddr + ph.filesz >= fault_addr + PGSIZE)
+		            loaduvm(currproc->pgdir, (char *)(ph.vaddr + fault_addr), ip, ph.off + fault_addr, PGSIZE);
+		        else{
+		            if(fault_addr >= ph.filesz){
+			            if(fault_addr + PGSIZE <= ph.memsz)
+			                stosb(mem, 0, PGSIZE);
+			            else
+			                stosb(mem, 0, ph.memsz - fault_addr);
+		            }
+		            else{
+			            loaduvm(currproc->pgdir, (char *)(ph.vaddr + fault_addr), ip, ph.off + fault_addr, ph.filesz - fault_addr);
+			            stosb((mem + (ph.filesz - fault_addr)), 0, PGSIZE - (ph.filesz - fault_addr)); 
+			            ip = namei(currproc->path);
+		            }
+		        }
+	        }
+	    }
+	    iunlockput(ip);
+	    end_op();
+    }
+}
+void replace_page(struct proc *currproc){
+    pte_t *pte;
+    uint i;
+    uint alloc = 8, pa = 0, min_va = currproc->sz;
+    uint flags;
+    char reach_alloc_max = 0;
+    uint pte_alloc;
+    if(currproc->alloc == 0)
+	    panic("global replacement");
+    else{
+	    for(i = 0; i < (currproc->sz); i += PGSIZE){
+	        if(i == PGROUNDUP(currproc->elf_size))
+		        continue;
+	        if((pte = walkpgdir(currproc->pgdir, (void *)i, 0)) == 0)
+		        panic("page replacement : copyuvm should exist");
+	        if(*pte & (PTE_P)){
+		        pa = PTE_ADDR(*pte);
+		        flags = PTE_FLAGS(*pte);
+		        if(alloc > (PTE_ALLOC(*pte) >> 9)){
+		            alloc =  PTE_ALLOC(*pte) >> 9;
+		            min_va = i;
+		        }
+		        if((uint)(PTE_ALLOC(*pte) >> 9) > 0 ){
+		            pte_alloc = PTE_ALLOC(*pte) >> 9;
+		            if(pte_alloc == 7 ){
+			            if(reach_alloc_max == 0)
+			                reach_alloc_max = 1;
+		            }
+		            *pte = pa |  GETALLOC((pte_alloc - 1)) | flags ;
+		        }
+            }
+	    }
+	    pte = walkpgdir(currproc->pgdir, (void *)min_va, 0);
+	    pa = PTE_ADDR(*pte);
+	    memmove((currproc->buf), (char *)P2V(pa), PGSIZE);
+	    if(store_page(currproc, min_va) == -1)
+		    panic("Backing store size over");
+	    *pte = pa | PTE_W | PTE_U;
+	    char *va = P2V(pa);
+	    currproc->code_on_bs = 1;
+	    kfree(va);
+    }
+}
+int load_frame(char *pa, char *va){
+    struct buf *buff;
+    struct proc *currproc = myproc();
+    int j;
+    struct backstore_frame *temp = currproc->blist;
+    int current_index;
+    uint block_no;
+    while(1){
+	    if((char *)(temp->va) == va){
+	        current_index = ((uint)temp - (uint)(backstore.backstore_bitmap)) / sizeof(struct backstore_frame);
+	        block_no = BACKSTORE_START + current_index * 8;
+	        break;
+	    }
+	    if(temp->next_index == -1)
+	        return -1;
+	    temp = &(backstore.backstore_bitmap[temp->next_index]);
+    }
+    for(j = 0; j < 8; j++){
+	    buff = bread(ROOTDEV, (block_no) + j);
+	    memmove((pa + BSIZE * j), buff->data, BSIZE);
+	    brelse(buff);
+    }
+    return 1;
+}
 //PAGEBREAK!
 // Blank page.
 //PAGEBREAK!

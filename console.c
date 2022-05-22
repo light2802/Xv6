@@ -108,6 +108,7 @@ panic(char *s)
 {
   int i;
   uint pcs[10];
+  cprintf("pid:  %d", myproc()->pid);
 
   cli();
   cons.locking = 0;
